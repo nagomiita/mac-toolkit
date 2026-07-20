@@ -15,6 +15,7 @@ struct MacToolkitApp: App {
             ThermalModule(),
             NetworkSpeedModule(),
             WiFiModule(),
+            ScreenshotModule(),
         ])
         registry.startAll()
         _registry = State(initialValue: registry)
