@@ -159,9 +159,13 @@ private struct WiFiDetailView: View {
         }
     }
 
-    /// 見出しの右肩には最も知りたい 1 つ（接続先）だけを出す。
+    /// 見出しの右肩には最も知りたい 1 つを出す。SSID が取れれば接続先、
+    /// 取れなければ（位置情報未許可など）信号強度を出して、折りたたみ時にも
+    /// 見出しが空にならないようにする。
     private var summary: String? {
-        module.info?.ssid
+        guard let info = module.info else { return nil }
+        if let ssid = info.ssid { return ssid }
+        return "\(info.rssi) dBm"
     }
 
     @ViewBuilder

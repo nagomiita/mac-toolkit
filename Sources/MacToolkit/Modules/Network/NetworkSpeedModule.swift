@@ -92,9 +92,15 @@ final class NetworkSpeedModule: ToolModule {
         }
     }
 
+    /// 折りたたみ時にも速度が分かるよう、見出しに要約を出す。
+    private var summary: String? {
+        guard interfaceName != nil else { return nil }
+        return "↓\(ByteRate.format(bytesPerSecond: downloadRate))"
+    }
+
     func detailView() -> AnyView {
         AnyView(
-            ModuleSection(title: title, systemImage: systemImage) {
+            ModuleSection(title: title, systemImage: systemImage, summary: summary) {
                 if let interfaceName {
                     MetricRow(
                         label: "ダウンロード",

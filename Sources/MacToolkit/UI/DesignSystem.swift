@@ -53,7 +53,12 @@ extension View {
 
 // MARK: - 部品
 
-/// モジュール 1 つ分のまとまり。見出しと右肩の要約値。
+/// モジュール 1 つ分のまとまり。折りたたみ式。
+///
+/// 既定では見出し行（アイコン・タイトル・要約値）だけを見せ、クリックで
+/// 詳細を開く。7 モジュールを全部展開するとポップオーバーが縦に伸びすぎる
+/// ため、「共通の道を先に、詳細は一段深く」に従って畳んでおく。
+/// 開閉状態はモジュールごとに永続化する。
 ///
 /// 見出しにアイコンを添えるのは、区切り線と合わせて
 /// 「どこで領域が変わったか」を形でも拾えるようにするため。
@@ -63,23 +68,68 @@ struct ModuleSection<Content: View>: View {
     var summary: String?
     @ViewBuilder var content: Content
 
+    @AppStorage private var isExpanded: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    init(
+        title: String,
+        systemImage: String? = nil,
+        summary: String? = nil,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.title = title
+        self.systemImage = systemImage
+        self.summary = summary
+        self.content = content()
+        // タイトルをキーにして開閉を覚える。既定は畳んだ状態。
+        _isExpanded = AppStorage(wrappedValue: false, "section.expanded.\(title)")
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: Metrics.rowSpacing) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                if let systemImage {
-                    Image(systemName: systemImage)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                        // アイコンの幅を揃えて見出しの左端を一直線にする。
-                        .frame(width: 14, alignment: .center)
-                }
-                Text(title).moduleTitleStyle()
-                Spacer(minLength: 8)
-                if let summary {
-                    Text(summary).metricValueStyle()
-                }
+            Button(action: toggle) {
+                header
             }
-            content
+            .buttonStyle(.plain)
+
+            if isExpanded {
+                content
+                    .transition(.opacity)
+            }
+        }
+    }
+
+    private var header: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            if let systemImage {
+                Image(systemName: systemImage)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    // アイコンの幅を揃えて見出しの左端を一直線にする。
+                    .frame(width: 14, alignment: .center)
+            }
+            Text(title).moduleTitleStyle()
+            Spacer(minLength: 8)
+            if let summary {
+                Text(summary).metricValueStyle()
+            }
+            // 開閉の向きを示す。畳んでいるときは右向き。
+            Image(systemName: "chevron.right")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.tertiary)
+                .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                .frame(width: 10)
+        }
+        // 見出し行全体をクリック対象にする。
+        .contentShape(Rectangle())
+    }
+
+    private func toggle() {
+        // reduce-motion 時は開閉のアニメーションを避け、即座に切り替える。
+        if reduceMotion {
+            isExpanded.toggle()
+        } else {
+            withAnimation(.easeInOut(duration: 0.18)) { isExpanded.toggle() }
         }
     }
 }
