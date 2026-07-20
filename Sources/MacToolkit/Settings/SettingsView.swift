@@ -2,9 +2,13 @@ import SwiftUI
 
 struct SettingsView: View {
     @Bindable var registry: ModuleRegistry
+    @State private var loginItem = LoginItem()
 
     var body: some View {
         TabView {
+            GeneralSettingsTab(loginItem: loginItem)
+                .tabItem { Label("一般", systemImage: "gearshape") }
+
             ModuleSettingsTab(registry: registry)
                 // 「一般」のような曖昧な名前ではなく中身で名づける。
                 .tabItem { Label("表示項目", systemImage: "square.grid.2x2") }
@@ -13,6 +17,39 @@ struct SettingsView: View {
                 .tabItem { Label("更新間隔", systemImage: "timer") }
         }
         .frame(width: 460, height: 340)
+        // 設定を開くたびに実際の登録状態を取り直す（システム設定側で
+        // 解除された場合などに追従するため）。
+        .onAppear { loginItem.refresh() }
+    }
+}
+
+private struct GeneralSettingsTab: View {
+    @Bindable var loginItem: LoginItem
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle(isOn: Binding(
+                    get: { loginItem.isEnabled },
+                    set: { loginItem.setEnabled($0) }
+                )) {
+                    Text("ログイン時に起動")
+                }
+                .disabled(!loginItem.canToggle)
+            } footer: {
+                if loginItem.canToggle {
+                    Text("Mac にログインすると自動的に起動します。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    // 「なぜ操作できないか」と「どうすればよいか」を必ず示す。
+                    Text("この設定を使うには、アプリを「アプリケーション」フォルダに移動してください。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .formStyle(.grouped)
     }
 }
 
