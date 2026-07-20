@@ -156,3 +156,53 @@ struct StatusDot: View {
             .frame(width: 7, height: 7)
     }
 }
+
+/// 直近の使用率（0.0〜1.0）の折れ線グラフ。CPU と GPU で共用する。
+///
+/// 面で塗ると半透明の上に半透明が重なって読みづらくなるため、
+/// 線と控えめな塗りに留める。
+struct UsageHistoryChart: View {
+    let values: [Double]
+    /// 横軸に確保する点数。値がこれに満たない間はグラフが右へ伸びていく。
+    var capacity: Int = 60
+
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    var body: some View {
+        GeometryReader { geometry in
+            let width = geometry.size.width
+            let height = geometry.size.height
+            let step = width / CGFloat(max(1, capacity - 1))
+
+            let line = Path { path in
+                for (index, value) in values.enumerated() {
+                    let point = CGPoint(
+                        x: CGFloat(index) * step,
+                        y: height * (1 - CGFloat(min(1, max(0, value))))
+                    )
+                    index == 0 ? path.move(to: point) : path.addLine(to: point)
+                }
+            }
+
+            ZStack {
+                if values.count > 1 {
+                    var area = line
+                    let _ = {
+                        area.addLine(to: CGPoint(x: CGFloat(values.count - 1) * step, y: height))
+                        area.addLine(to: CGPoint(x: 0, y: height))
+                        area.closeSubpath()
+                    }()
+                    area.fill(.tint.opacity(0.18))
+                }
+                line.stroke(.tint, style: StrokeStyle(lineWidth: 1.5, lineJoin: .round))
+            }
+        }
+        .background(backgroundStyle, in: RoundedRectangle(cornerRadius: 5))
+    }
+
+    private var backgroundStyle: AnyShapeStyle {
+        reduceTransparency
+            ? AnyShapeStyle(Color.secondary.opacity(0.25))
+            : AnyShapeStyle(.quaternary.opacity(0.5))
+    }
+}

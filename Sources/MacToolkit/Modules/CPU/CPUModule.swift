@@ -83,7 +83,7 @@ final class CPUModule: ToolModule {
                 systemImage: systemImage,
                 summary: "\(Int((total * 100).rounded()))%"
             ) {
-                CPUHistoryChart(values: history)
+                UsageHistoryChart(values: history, capacity: Self.historyLength)
                     .frame(height: 30)
                     .padding(.bottom, 2)
 
@@ -102,55 +102,6 @@ final class CPUModule: ToolModule {
 
     private func percent(_ value: Double) -> String {
         String(format: "%.1f%%", value * 100)
-    }
-}
-
-/// 直近の使用率の折れ線グラフ。
-///
-/// 面で塗ると半透明の上に半透明が重なって読みづらくなるため、
-/// 線と控えめな塗りに留める。
-private struct CPUHistoryChart: View {
-    let values: [Double]
-
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-
-    var body: some View {
-        GeometryReader { geometry in
-            let width = geometry.size.width
-            let height = geometry.size.height
-            // 常に一定時間ぶんの幅で描き、値が増えるたびに右へ伸びるようにする。
-            let step = width / CGFloat(max(1, CPUModule.historyLength - 1))
-
-            let line = Path { path in
-                for (index, value) in values.enumerated() {
-                    let point = CGPoint(
-                        x: CGFloat(index) * step,
-                        y: height * (1 - CGFloat(min(1, max(0, value))))
-                    )
-                    index == 0 ? path.move(to: point) : path.addLine(to: point)
-                }
-            }
-
-            ZStack {
-                if values.count > 1 {
-                    var area = line
-                    let _ = {
-                        area.addLine(to: CGPoint(x: CGFloat(values.count - 1) * step, y: height))
-                        area.addLine(to: CGPoint(x: 0, y: height))
-                        area.closeSubpath()
-                    }()
-                    area.fill(.tint.opacity(0.18))
-                }
-                line.stroke(.tint, style: StrokeStyle(lineWidth: 1.5, lineJoin: .round))
-            }
-        }
-        .background(backgroundStyle, in: RoundedRectangle(cornerRadius: 5))
-    }
-
-    private var backgroundStyle: AnyShapeStyle {
-        reduceTransparency
-            ? AnyShapeStyle(Color.secondary.opacity(0.25))
-            : AnyShapeStyle(.quaternary.opacity(0.5))
     }
 }
 
