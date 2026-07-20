@@ -9,6 +9,7 @@ struct MacToolkitApp: App {
         let registry = ModuleRegistry(modules: [
             CPUModule(),
             MemoryModule(),
+            DiskModule(),
             NetworkSpeedModule(),
             WiFiModule()
         ])
