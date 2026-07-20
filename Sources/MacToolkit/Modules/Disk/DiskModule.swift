@@ -48,6 +48,7 @@ final class DiskModule: ToolModule {
         AnyView(
             ModuleSection(
                 title: title,
+                systemImage: systemImage,
                 summary: bootVolume.map { "空き \(Self.format($0.available))" }
             ) {
                 if volumes.isEmpty {

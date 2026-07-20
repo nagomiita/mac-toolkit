@@ -60,8 +60,13 @@ private struct MenuBarContentView: View {
             if registry.activeModules.isEmpty {
                 emptyState
             } else {
-                ForEach(registry.activeModules, id: \.id) { module in
+                let modules = registry.activeModules
+                ForEach(Array(modules.enumerated()), id: \.element.id) { index, module in
                     module.detailView()
+                    // 最後のモジュールの下は Divider が続くので線を重ねない。
+                    if index < modules.count - 1 {
+                        SectionSeparator()
+                    }
                 }
             }
 

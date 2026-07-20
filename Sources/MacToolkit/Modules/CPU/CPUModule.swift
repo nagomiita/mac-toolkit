@@ -78,7 +78,11 @@ final class CPUModule: ToolModule {
 
     func detailView() -> AnyView {
         AnyView(
-            ModuleSection(title: title, summary: "\(Int((total * 100).rounded()))%") {
+            ModuleSection(
+                title: title,
+                systemImage: systemImage,
+                summary: "\(Int((total * 100).rounded()))%"
+            ) {
                 CPUHistoryChart(values: history)
                     .frame(height: 30)
                     .padding(.bottom, 2)

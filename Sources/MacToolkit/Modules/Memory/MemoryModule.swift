@@ -59,6 +59,7 @@ final class MemoryModule: ToolModule {
         AnyView(
             ModuleSection(
                 title: title,
+                systemImage: systemImage,
                 summary: snapshot.map { "\(Self.gigabytes($0.used)) / \(Self.gigabytes($0.total))" }
             ) {
                 if let snapshot {

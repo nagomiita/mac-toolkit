@@ -94,7 +94,7 @@ final class NetworkSpeedModule: ToolModule {
 
     func detailView() -> AnyView {
         AnyView(
-            ModuleSection(title: title) {
+            ModuleSection(title: title, systemImage: systemImage) {
                 if let interfaceName {
                     MetricRow(
                         label: "ダウンロード",

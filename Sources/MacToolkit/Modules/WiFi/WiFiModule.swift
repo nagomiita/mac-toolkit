@@ -150,7 +150,7 @@ private struct WiFiDetailView: View {
     let module: WiFiModule
 
     var body: some View {
-        ModuleSection(title: module.title, summary: summary) {
+        ModuleSection(title: module.title, systemImage: module.systemImage, summary: summary) {
             if let info = module.info {
                 connected(info)
             } else {

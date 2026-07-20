@@ -5,8 +5,9 @@ import SwiftUI
 /// 「同じに見えるものは同じように振る舞い、同じ場所にある」ことを守るため、
 /// 各モジュールは直接 Text を並べず必ずここの部品を使う。
 enum Metrics {
-    /// モジュール間の余白。
-    static let sectionSpacing: CGFloat = 14
+    /// モジュール間の余白。区切り線と併用するので、線がなかった頃より狭くする
+    /// （線と余白で二重に離すと間延びする）。
+    static let sectionSpacing: CGFloat = 10
     /// セクション内の行間。
     static let rowSpacing: CGFloat = 5
     static let popoverWidth: CGFloat = 272
@@ -53,14 +54,25 @@ extension View {
 // MARK: - 部品
 
 /// モジュール 1 つ分のまとまり。見出しと右肩の要約値。
+///
+/// 見出しにアイコンを添えるのは、区切り線と合わせて
+/// 「どこで領域が変わったか」を形でも拾えるようにするため。
 struct ModuleSection<Content: View>: View {
     let title: String
+    var systemImage: String?
     var summary: String?
     @ViewBuilder var content: Content
 
     var body: some View {
         VStack(alignment: .leading, spacing: Metrics.rowSpacing) {
-            HStack(alignment: .firstTextBaseline) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                if let systemImage {
+                    Image(systemName: systemImage)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        // アイコンの幅を揃えて見出しの左端を一直線にする。
+                        .frame(width: 14, alignment: .center)
+                }
                 Text(title).moduleTitleStyle()
                 Spacer(minLength: 8)
                 if let summary {
@@ -69,6 +81,20 @@ struct ModuleSection<Content: View>: View {
             }
             content
         }
+    }
+}
+
+/// モジュール間の区切り。
+///
+/// ポップオーバー自体が半透明のマテリアルなので、カード状の面を重ねると
+/// 可読性が落ちる。面ではなく細い線で区切り、線は控えめにして
+/// 余白との合わせ技で領域を示す。
+struct SectionSeparator: View {
+    @Environment(\.colorSchemeContrast) private var contrast
+
+    var body: some View {
+        Divider()
+            .opacity(contrast == .increased ? 1 : 0.6)
     }
 }
 
