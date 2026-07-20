@@ -1,0 +1,75 @@
+import Foundation
+import Observation
+
+/// 全モジュールの登録・有効/無効・ライフサイクルを管理する。
+@MainActor
+@Observable
+final class ModuleRegistry {
+    /// 登録順＝メニューバーでの表示順。
+    private(set) var modules: [any ToolModule] = []
+
+    /// 有効なモジュールの id 集合。UserDefaults に永続化する。
+    private(set) var enabledIDs: Set<String> = []
+
+    var interval: TimeInterval {
+        didSet {
+            UserDefaults.standard.set(interval, forKey: Self.intervalKey)
+            sampler.setInterval(interval)
+        }
+    }
+
+    private let sampler: Sampler
+    private static let enabledKey = "enabledModuleIDs"
+    private static let intervalKey = "sampleInterval"
+
+    init(modules: [any ToolModule]) {
+        let saved = UserDefaults.standard.double(forKey: Self.intervalKey)
+        let interval = saved > 0 ? saved : 1.0
+        self.interval = interval
+        self.sampler = Sampler(interval: interval)
+
+        self.modules = modules.filter(\.isAvailable)
+
+        if let stored = UserDefaults.standard.stringArray(forKey: Self.enabledKey) {
+            enabledIDs = Set(stored)
+        } else {
+            // 初回起動時は利用可能なモジュールを全て有効にする。
+            enabledIDs = Set(self.modules.map(\.id))
+        }
+    }
+
+    /// 有効かつ利用可能なモジュール。
+    var activeModules: [any ToolModule] {
+        modules.filter { enabledIDs.contains($0.id) }
+    }
+
+    func isEnabled(_ module: any ToolModule) -> Bool {
+        enabledIDs.contains(module.id)
+    }
+
+    func setEnabled(_ enabled: Bool, for module: any ToolModule) {
+        guard enabled != isEnabled(module) else { return }
+        if enabled {
+            enabledIDs.insert(module.id)
+            module.start()
+        } else {
+            enabledIDs.remove(module.id)
+            module.stop()
+        }
+        UserDefaults.standard.set(Array(enabledIDs), forKey: Self.enabledKey)
+    }
+
+    /// アプリ起動時に一度だけ呼ぶ。
+    func startAll() {
+        for module in activeModules { module.start() }
+        sampler.start { [weak self] in
+            guard let self else { return }
+            for module in self.activeModules { module.tick() }
+        }
+    }
+
+    func stopAll() {
+        sampler.stop()
+        for module in activeModules { module.stop() }
+    }
+}
