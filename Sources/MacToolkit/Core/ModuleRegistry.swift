@@ -11,6 +11,12 @@ final class ModuleRegistry {
     /// 有効なモジュールの id 集合。UserDefaults に永続化する。
     private(set) var enabledIDs: Set<String> = []
 
+    /// メニューバー本体に数値を出すモジュールの id 集合。
+    ///
+    /// 全部を出すとメニューバーが埋まるため、既定では常に動き続ける値
+    /// （CPU とネットワーク）だけを出し、残りはポップオーバーに置く。
+    private(set) var menuBarIDs: Set<String> = []
+
     var interval: TimeInterval {
         didSet {
             UserDefaults.standard.set(interval, forKey: Self.intervalKey)
@@ -20,7 +26,9 @@ final class ModuleRegistry {
 
     private let sampler: Sampler
     private static let enabledKey = "enabledModuleIDs"
+    private static let menuBarKey = "menuBarModuleIDs"
     private static let intervalKey = "sampleInterval"
+    private static let defaultMenuBarIDs: Set<String> = ["cpu", "network"]
 
     init(modules: [any ToolModule]) {
         let saved = UserDefaults.standard.double(forKey: Self.intervalKey)
@@ -36,6 +44,31 @@ final class ModuleRegistry {
             // 初回起動時は利用可能なモジュールを全て有効にする。
             enabledIDs = Set(self.modules.map(\.id))
         }
+
+        if let stored = UserDefaults.standard.stringArray(forKey: Self.menuBarKey) {
+            menuBarIDs = Set(stored)
+        } else {
+            menuBarIDs = Self.defaultMenuBarIDs
+        }
+    }
+
+    /// メニューバー本体に数値を出すモジュール。
+    var menuBarModules: [any ToolModule] {
+        activeModules.filter { menuBarIDs.contains($0.id) }
+    }
+
+    func isShownInMenuBar(_ module: any ToolModule) -> Bool {
+        menuBarIDs.contains(module.id)
+    }
+
+    func setShownInMenuBar(_ shown: Bool, for module: any ToolModule) {
+        guard shown != isShownInMenuBar(module) else { return }
+        if shown {
+            menuBarIDs.insert(module.id)
+        } else {
+            menuBarIDs.remove(module.id)
+        }
+        UserDefaults.standard.set(Array(menuBarIDs), forKey: Self.menuBarKey)
     }
 
     /// 有効かつ利用可能なモジュール。

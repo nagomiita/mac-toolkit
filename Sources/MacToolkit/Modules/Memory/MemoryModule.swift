@@ -24,53 +24,45 @@ final class MemoryModule: ToolModule {
     func statusItemView() -> AnyView? {
         AnyView(
             Text(snapshot.map { Self.gigabytes($0.used) } ?? "--")
-                .font(.system(size: 11, design: .monospaced))
-                .monospacedDigit()
-                .frame(minWidth: 42, alignment: .trailing)
+                .menuBarValueStyle()
+                .frame(minWidth: 44, alignment: .trailing)
         )
     }
 
     func detailView() -> AnyView {
         AnyView(
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Text(title).font(.headline)
-                    Spacer()
-                    if let snapshot {
-                        Text("\(Self.gigabytes(snapshot.used)) / \(Self.gigabytes(snapshot.total))")
-                            .monospacedDigit()
-                    }
-                }
-
+            ModuleSection(
+                title: title,
+                summary: snapshot.map { "\(Self.gigabytes($0.used)) / \(Self.gigabytes($0.total))" }
+            ) {
                 if let snapshot {
                     MemoryBreakdownBar(snapshot: snapshot)
-                        .frame(height: 10)
+                        .frame(height: 8)
+                        .padding(.bottom, 2)
 
-                    LabeledContent("Wired", value: Self.gigabytes(snapshot.wired))
-                    LabeledContent("アクティブ", value: Self.gigabytes(snapshot.active))
-                    LabeledContent("圧縮", value: Self.gigabytes(snapshot.compressed))
-                    LabeledContent("キャッシュ", value: Self.gigabytes(snapshot.cached))
+                    MetricRow(label: "Wired", value: Self.gigabytes(snapshot.wired))
+                    MetricRow(label: "アクティブ", value: Self.gigabytes(snapshot.active))
+                    MetricRow(label: "圧縮", value: Self.gigabytes(snapshot.compressed))
+                    MetricRow(label: "キャッシュ", value: Self.gigabytes(snapshot.cached))
 
                     if snapshot.swapTotal > 0 {
-                        LabeledContent(
-                            "スワップ",
+                        MetricRow(
+                            label: "スワップ",
                             value: "\(Self.gigabytes(snapshot.swapUsed)) / \(Self.gigabytes(snapshot.swapTotal))"
                         )
                     }
 
-                    HStack(spacing: 4) {
-                        Circle()
-                            .fill(Self.pressureColor(snapshot.pressure))
-                            .frame(width: 8, height: 8)
+                    // 色だけに意味を持たせず、必ず数値と併記する。
+                    HStack(spacing: 5) {
+                        StatusDot(color: Self.pressureColor(snapshot.pressure))
                         Text("メモリプレッシャー \(Int((snapshot.pressure * 100).rounded()))%")
-                            .font(.caption)
+                            .metricCaptionStyle()
                     }
+                    .padding(.top, 1)
                 } else {
-                    Text("取得できません")
-                        .foregroundStyle(.secondary)
+                    Text("取得できません").metricCaptionStyle()
                 }
             }
-            .monospacedDigit()
         )
     }
 
@@ -112,7 +104,7 @@ private struct MemoryBreakdownBar: View {
             }
         }
         .background(.quaternary.opacity(0.5))
-        .clipShape(RoundedRectangle(cornerRadius: 3))
+        .clipShape(Capsule())
     }
 
     private func width(for value: UInt64, in total: CGFloat) -> CGFloat {

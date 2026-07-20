@@ -150,48 +150,60 @@ private struct WiFiDetailView: View {
     let module: WiFiModule
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(module.title).font(.headline)
-
+        ModuleSection(title: module.title, summary: summary) {
             if let info = module.info {
                 connected(info)
             } else {
-                Text("Wi-Fi はオフです")
-                    .foregroundStyle(.secondary)
+                Text("Wi-Fi はオフです").metricCaptionStyle()
             }
         }
-        .monospacedDigit()
+    }
+
+    /// 見出しの右肩には最も知りたい 1 つ（接続先）だけを出す。
+    private var summary: String? {
+        module.info?.ssid
     }
 
     @ViewBuilder
     private func connected(_ info: WiFiInfo) -> some View {
-        if let ssid = info.ssid {
-            LabeledContent("ネットワーク", value: ssid)
-        } else if module.needsLocationPermission {
-            permissionNotice
-        }
+        // 信号強度は数値より先に強弱が伝わるよう棒で示す。
+        MeterBar(value: info.quality, tint: signalColor(info.quality))
+            .padding(.bottom, 2)
 
-        LabeledContent("信号強度", value: "\(info.rssi) dBm")
-        LabeledContent("ノイズ", value: "\(info.noise) dBm (SN \(info.signalToNoise) dB)")
+        MetricRow(label: "信号強度", value: "\(info.rssi) dBm")
+        MetricRow(label: "ノイズ", value: "\(info.noise) dBm")
 
         if let channel = info.channel, let band = info.band {
-            LabeledContent("チャンネル", value: "\(channel) / \(band) / \(info.channelWidth ?? "-")")
+            MetricRow(label: "チャンネル", value: "\(channel)・\(band)")
         }
 
-        LabeledContent("規格", value: info.phyMode)
-        LabeledContent("送信レート", value: String(format: "%.0f Mbps", info.transmitRate))
-        LabeledContent("セキュリティ", value: info.security)
+        MetricRow(label: "規格", value: info.phyMode)
+        MetricRow(label: "送信レート", value: String(format: "%.0f Mbps", info.transmitRate))
 
         if let ip = info.ipAddress {
-            LabeledContent("IP アドレス", value: ip)
+            MetricRow(label: "IP アドレス", value: ip)
+        }
+
+        Text("\(info.security)・SN 比 \(info.signalToNoise) dB").metricCaptionStyle()
+
+        if info.ssid == nil, module.needsLocationPermission {
+            permissionNotice
         }
     }
 
+    private func signalColor(_ quality: Double) -> Color {
+        switch quality {
+        case ..<0.3: .red
+        case ..<0.6: .yellow
+        default: .green
+        }
+    }
+
+    /// 権限は起動時ではなく、必要になった場所で必要な分だけ求める。
     private var permissionNotice: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 5) {
             Text("ネットワーク名の表示には位置情報の許可が必要です")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .metricCaptionStyle()
                 .fixedSize(horizontal: false, vertical: true)
 
             if module.locationAuthorization == .notDetermined {
@@ -200,5 +212,6 @@ private struct WiFiDetailView: View {
                 Button("システム設定を開く") { module.openLocationSettings() }
             }
         }
+        .padding(.top, 3)
     }
 }

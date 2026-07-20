@@ -21,7 +21,7 @@ final class CPUModule: ToolModule {
     private let counters = CPUCounters()
     private var previous: [CPUCounters.Ticks]?
 
-    private static let historyLength = 60
+    static let historyLength = 60
 
     var coreLayoutDescription: String? {
         guard let p = counters.performanceCoreCount,
@@ -70,37 +70,29 @@ final class CPUModule: ToolModule {
     func statusItemView() -> AnyView? {
         AnyView(
             Text("\(Int((total * 100).rounded()))%")
-                .font(.system(size: 11, design: .monospaced))
-                .monospacedDigit()
+                .menuBarValueStyle()
                 // 3 桁ぶん確保して 9% と 100% で幅が変わらないようにする。
-                .frame(minWidth: 34, alignment: .trailing)
+                .frame(minWidth: 32, alignment: .trailing)
         )
     }
 
     func detailView() -> AnyView {
         AnyView(
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Text(title).font(.headline)
-                    Spacer()
-                    Text("\(Int((total * 100).rounded()))%").monospacedDigit()
-                }
-
+            ModuleSection(title: title, summary: "\(Int((total * 100).rounded()))%") {
                 CPUHistoryChart(values: history)
-                    .frame(height: 32)
+                    .frame(height: 30)
+                    .padding(.bottom, 2)
 
-                LabeledContent("ユーザ", value: percent(user))
-                LabeledContent("システム", value: percent(system))
-
-                if let layout = coreLayoutDescription {
-                    Text(layout)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                MetricRow(label: "ユーザ", value: percent(user))
+                MetricRow(label: "システム", value: percent(system))
 
                 CPUCoreBars(values: perCore)
+                    .padding(.top, 2)
+
+                if let layout = coreLayoutDescription {
+                    Text(layout).metricCaptionStyle()
+                }
             }
-            .monospacedDigit()
         )
     }
 
@@ -110,30 +102,51 @@ final class CPUModule: ToolModule {
 }
 
 /// 直近の使用率の折れ線グラフ。
+///
+/// 面で塗ると半透明の上に半透明が重なって読みづらくなるため、
+/// 線と控えめな塗りに留める。
 private struct CPUHistoryChart: View {
     let values: [Double]
+
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
         GeometryReader { geometry in
             let width = geometry.size.width
             let height = geometry.size.height
-            // 常に一定時間ぶんの幅で描き、値が増えるたびに右から伸びるようにする。
-            let step = width / CGFloat(max(1, 59))
+            // 常に一定時間ぶんの幅で描き、値が増えるたびに右へ伸びるようにする。
+            let step = width / CGFloat(max(1, CPUModule.historyLength - 1))
 
-            Path { path in
+            let line = Path { path in
                 for (index, value) in values.enumerated() {
-                    let x = CGFloat(index) * step
-                    let y = height * (1 - CGFloat(min(1, max(0, value))))
-                    if index == 0 {
-                        path.move(to: CGPoint(x: x, y: y))
-                    } else {
-                        path.addLine(to: CGPoint(x: x, y: y))
-                    }
+                    let point = CGPoint(
+                        x: CGFloat(index) * step,
+                        y: height * (1 - CGFloat(min(1, max(0, value))))
+                    )
+                    index == 0 ? path.move(to: point) : path.addLine(to: point)
                 }
             }
-            .stroke(.tint, lineWidth: 1.5)
+
+            ZStack {
+                if values.count > 1 {
+                    var area = line
+                    let _ = {
+                        area.addLine(to: CGPoint(x: CGFloat(values.count - 1) * step, y: height))
+                        area.addLine(to: CGPoint(x: 0, y: height))
+                        area.closeSubpath()
+                    }()
+                    area.fill(.tint.opacity(0.18))
+                }
+                line.stroke(.tint, style: StrokeStyle(lineWidth: 1.5, lineJoin: .round))
+            }
         }
-        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 4))
+        .background(backgroundStyle, in: RoundedRectangle(cornerRadius: 5))
+    }
+
+    private var backgroundStyle: AnyShapeStyle {
+        reduceTransparency
+            ? AnyShapeStyle(Color.secondary.opacity(0.25))
+            : AnyShapeStyle(.quaternary.opacity(0.5))
     }
 }
 
@@ -141,9 +154,11 @@ private struct CPUHistoryChart: View {
 private struct CPUCoreBars: View {
     let values: [Double]
 
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
     var body: some View {
-        HStack(alignment: .bottom, spacing: 2) {
-            ForEach(Array(values.enumerated()), id: \.offset) { _, value in
+        HStack(alignment: .bottom, spacing: 3) {
+            ForEach(Array(values.enumerated()), id: \.offset) { index, value in
                 GeometryReader { geometry in
                     VStack(spacing: 0) {
                         Spacer(minLength: 0)
@@ -152,10 +167,18 @@ private struct CPUCoreBars: View {
                             .frame(height: geometry.size.height * CGFloat(min(1, max(0, value))))
                     }
                 }
-                .background(.quaternary.opacity(0.5))
+                .background(trackStyle)
                 .clipShape(RoundedRectangle(cornerRadius: 2))
+                .accessibilityLabel("コア \(index + 1)")
+                .accessibilityValue("\(Int((value * 100).rounded()))パーセント")
             }
         }
-        .frame(height: 24)
+        .frame(height: 20)
+    }
+
+    private var trackStyle: AnyShapeStyle {
+        reduceTransparency
+            ? AnyShapeStyle(Color.secondary.opacity(0.25))
+            : AnyShapeStyle(.quaternary.opacity(0.5))
     }
 }

@@ -75,30 +75,40 @@ final class NetworkSpeedModule: ToolModule {
 
     func statusItemView() -> AnyView? {
         AnyView(
-            VStack(alignment: .trailing, spacing: -2) {
-                Text("↓ " + ByteRate.format(bytesPerSecond: downloadRate))
-                Text("↑ " + ByteRate.format(bytesPerSecond: uploadRate))
+            // 2 段組みはメニューバーの高さでは窮屈なので、矢印付きで横に並べる。
+            // 幅を固定して、桁が変わっても隣のアイコンが動かないようにする。
+            HStack(spacing: 5) {
+                label("arrow.down", ByteRate.format(bytesPerSecond: downloadRate))
+                label("arrow.up", ByteRate.format(bytesPerSecond: uploadRate))
             }
-            .font(.system(size: 9, design: .monospaced))
-            .monospacedDigit()
+            .menuBarValueStyle()
         )
+    }
+
+    private func label(_ symbol: String, _ text: String) -> some View {
+        HStack(spacing: 2) {
+            Image(systemName: symbol).font(.system(size: 8, weight: .semibold))
+            Text(text).frame(minWidth: 54, alignment: .leading)
+        }
     }
 
     func detailView() -> AnyView {
         AnyView(
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title).font(.headline)
-
+            ModuleSection(title: title) {
                 if let interfaceName {
-                    LabeledContent("ダウンロード", value: ByteRate.format(bytesPerSecond: downloadRate))
-                    LabeledContent("アップロード", value: ByteRate.format(bytesPerSecond: uploadRate))
-                    LabeledContent("インターフェース", value: interfaceName)
+                    MetricRow(
+                        label: "ダウンロード",
+                        value: ByteRate.format(bytesPerSecond: downloadRate)
+                    )
+                    MetricRow(
+                        label: "アップロード",
+                        value: ByteRate.format(bytesPerSecond: uploadRate)
+                    )
+                    Text("インターフェース \(interfaceName)").metricCaptionStyle()
                 } else {
-                    Text("接続されていません")
-                        .foregroundStyle(.secondary)
+                    Text("接続されていません").metricCaptionStyle()
                 }
             }
-            .monospacedDigit()
         )
     }
 }

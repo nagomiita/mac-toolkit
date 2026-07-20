@@ -39,26 +39,25 @@ final class DiskModule: ToolModule {
         guard let bootVolume else { return nil }
         return AnyView(
             Text(Self.format(bootVolume.available))
-                .font(.system(size: 11, design: .monospaced))
-                .monospacedDigit()
+                .menuBarValueStyle()
                 .frame(minWidth: 46, alignment: .trailing)
         )
     }
 
     func detailView() -> AnyView {
         AnyView(
-            VStack(alignment: .leading, spacing: 6) {
-                Text(title).font(.headline)
-
+            ModuleSection(
+                title: title,
+                summary: bootVolume.map { "空き \(Self.format($0.available))" }
+            ) {
                 if volumes.isEmpty {
-                    Text("取得できません").foregroundStyle(.secondary)
+                    Text("取得できません").metricCaptionStyle()
                 } else {
                     ForEach(volumes) { volume in
                         VolumeRow(volume: volume)
                     }
                 }
             }
-            .monospacedDigit()
         )
     }
 
@@ -76,28 +75,23 @@ private struct VolumeRow: View {
     let volume: DiskCounters.Volume
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(alignment: .firstTextBaseline) {
                 Label {
-                    Text(volume.name)
+                    Text(volume.name).metricLabelStyle()
                 } icon: {
                     Image(systemName: volume.isRemovable ? "externaldrive" : "internaldrive")
+                        .foregroundStyle(.secondary)
                 }
-                .font(.callout)
-
-                Spacer()
-
-                Text("空き \(DiskModule.format(volume.available))")
-                    .font(.callout)
+                Spacer(minLength: 12)
+                Text(DiskModule.format(volume.available)).metricValueStyle()
             }
 
-            ProgressView(value: volume.usage)
-                .progressViewStyle(.linear)
-                .tint(volume.usage >= 0.9 ? .red : .accentColor)
+            // 残り 10% を切ったら赤にする。色だけでなく下の行に数値も出す。
+            MeterBar(value: volume.usage, tint: volume.usage >= 0.9 ? .red : .accentColor)
 
             Text("\(DiskModule.format(volume.used)) / \(DiskModule.format(volume.total)) を使用")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .metricCaptionStyle()
         }
     }
 }

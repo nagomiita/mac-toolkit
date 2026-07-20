@@ -11,7 +11,7 @@ struct MacToolkitApp: App {
             MemoryModule(),
             DiskModule(),
             NetworkSpeedModule(),
-            WiFiModule()
+            WiFiModule(),
         ])
         registry.startAll()
         _registry = State(initialValue: registry)
@@ -40,9 +40,12 @@ private struct MenuBarLabelView: View {
     let registry: ModuleRegistry
 
     var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "gauge.with.dots.needle.33percent")
-            ForEach(registry.activeModules, id: \.id) { module in
+        HStack(spacing: 6) {
+            // 数値を 1 つも出さない設定でもクリック対象が残るようアイコンは常に出す。
+            if registry.menuBarModules.isEmpty {
+                Image(systemName: "gauge.with.dots.needle.33percent")
+            }
+            ForEach(registry.menuBarModules, id: \.id) { module in
                 if let view = module.statusItemView() { view }
             }
         }
@@ -53,10 +56,9 @@ private struct MenuBarContentView: View {
     let registry: ModuleRegistry
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Metrics.sectionSpacing) {
             if registry.activeModules.isEmpty {
-                Text("有効なモジュールがありません")
-                    .foregroundStyle(.secondary)
+                emptyState
             } else {
                 ForEach(registry.activeModules, id: \.id) { module in
                     module.detailView()
@@ -64,17 +66,32 @@ private struct MenuBarContentView: View {
             }
 
             Divider()
+            footer
+        }
+        .padding(Metrics.popoverPadding)
+        .frame(width: Metrics.popoverWidth)
+    }
 
-            HStack {
-                SettingsLink { Text("設定…") }
-                Spacer()
-                Button("終了") {
-                    registry.stopAll()
-                    NSApplication.shared.terminate(nil)
-                }
+    /// 「どこにいるか・どうすれば出られるか」に必ず答える。
+    private var emptyState: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("表示中の項目はありません").moduleTitleStyle()
+            Text("設定でモジュールを有効にしてください").metricCaptionStyle()
+        }
+    }
+
+    private var footer: some View {
+        HStack {
+            SettingsLink {
+                Text("設定…")
+            }
+            Spacer()
+            Button("終了") {
+                registry.stopAll()
+                NSApplication.shared.terminate(nil)
             }
         }
-        .padding(12)
-        .frame(width: 260)
+        .buttonStyle(.accessoryBar)
+        .font(.callout)
     }
 }
