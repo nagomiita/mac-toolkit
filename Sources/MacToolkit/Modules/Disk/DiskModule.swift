@@ -11,12 +11,18 @@ final class DiskModule: ToolModule {
 
     private(set) var volumes: [DiskCounters.Volume] = []
 
+    /// ディスク I/O の速度（バイト/秒）。取れないときは nil。
+    private(set) var readRate: Double?
+    private(set) var writeRate: Double?
+
     /// 起動ボリューム。メニューバーにはこれだけを出す。
     var bootVolume: DiskCounters.Volume? {
         volumes.first { $0.path == "/" } ?? volumes.first
     }
 
     private var tickCount = 0
+    private var previousIO: DiskIOCounters.Sample?
+    private var lastSampledAt: Date?
 
     func start() {
         volumes = DiskCounters.read()
@@ -24,15 +30,55 @@ final class DiskModule: ToolModule {
 
     func stop() {
         volumes = []
+        readRate = nil
+        writeRate = nil
+        previousIO = nil
+        lastSampledAt = nil
         tickCount = 0
     }
 
-    /// 容量は秒単位では動かないうえ、全ボリュームの問い合わせは
-    /// ネットワークボリュームがあると待たされることがある。5 秒に 1 回で十分。
     func tick() {
+        sampleIO()
+
+        // 容量は秒単位では動かないうえ、全ボリュームの問い合わせは
+        // ネットワークボリュームがあると待たされることがある。5 秒に 1 回で十分。
         tickCount += 1
         guard tickCount % 5 == 0 else { return }
         volumes = DiskCounters.read()
+    }
+
+    /// ディスク I/O の速度を毎ティック更新する。累積カウンタの差分を取る。
+    private func sampleIO() {
+        let now = Date()
+        defer { lastSampledAt = now }
+
+        guard let current = DiskIOCounters.read() else {
+            readRate = nil
+            writeRate = nil
+            previousIO = nil
+            return
+        }
+
+        guard let last = previousIO, let lastAt = lastSampledAt else {
+            previousIO = current
+            readRate = nil
+            writeRate = nil
+            return
+        }
+
+        // 実際の経過時間で割る（Timer は tolerance の分ずれるため）。
+        let elapsed = now.timeIntervalSince(lastAt)
+        guard elapsed > 0 else { return }
+
+        readRate = rate(from: last.read, to: current.read, seconds: elapsed)
+        writeRate = rate(from: last.written, to: current.written, seconds: elapsed)
+        previousIO = current
+    }
+
+    /// ドライブの抜き差しで合計が減ることがある。減っていたらその 1 回は捨てる。
+    private func rate(from previous: UInt64, to current: UInt64, seconds: TimeInterval) -> Double {
+        guard current >= previous else { return 0 }
+        return Double(current - previous) / seconds
     }
 
     func statusItemView() -> AnyView? {
@@ -51,6 +97,12 @@ final class DiskModule: ToolModule {
                 systemImage: systemImage,
                 summary: bootVolume.map { "空き \(Self.format($0.available))" }
             ) {
+                // 読み書き速度。取得できたときだけ出す。
+                if let readRate, let writeRate {
+                    MetricRow(label: "読み込み", value: ByteRate.format(bytesPerSecond: readRate))
+                    MetricRow(label: "書き込み", value: ByteRate.format(bytesPerSecond: writeRate))
+                }
+
                 if volumes.isEmpty {
                     Text("取得できません").metricCaptionStyle()
                 } else {
