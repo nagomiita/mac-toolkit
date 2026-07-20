@@ -14,6 +14,9 @@
 	<string>0.1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<!-- 権限の説明もユーザーに見えるので日本語で書く -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>接続中の Wi-Fi ネットワーク名（SSID）を表示するために使用します。位置情報の記録や送信は行いません。</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
 	<!-- Dock とアプリスイッチャーに出さず、メニューバーのみに常駐させる -->
