@@ -11,6 +11,7 @@ struct MacToolkitApp: App {
             GPUModule(),
             MemoryModule(),
             DiskModule(),
+            BatteryModule(),
             NetworkSpeedModule(),
             WiFiModule(),
         ])
