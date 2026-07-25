@@ -39,6 +39,12 @@ final class ClipboardModule: ToolModule {
 
     /// 既定は ⌥⌘V。⌘⇧V はエディタのプレーンテキストペーストと衝突するため避ける。
     private static let hotKeyName = "clipboard.panel"
+    private static let autoPasteKey = "clipboard.autoPaste"
+
+    init() {
+        // 権限が要るので既定はオフ。
+        autoPastes = UserDefaults.standard.bool(forKey: Self.autoPasteKey)
+    }
 
     func start() {
         let registered = HotKeyCenter.shared.register(
@@ -94,9 +100,43 @@ final class ClipboardModule: ToolModule {
     }
 
     /// 選んだ項目をクリップボードへ戻す。
-    func restore(_ item: ClipboardItem) {
+    ///
+    /// `andPaste` はパネルから選んだときだけ true。設定がオフなら何もしない。
+    func restore(_ item: ClipboardItem, andPaste: Bool = false) {
         guard watcher.writeBack(item) else { return }
         lastRestoredID = item.id
+        pasteFailure = nil
+
+        guard andPaste, autoPastes else { return }
+        Task { @MainActor in
+            // パネルが閉じ切って、キー入力が元のアプリへ戻るのを待つ。
+            try? await Task.sleep(for: .milliseconds(80))
+            pasteFailure = ClipboardPaster.paste()
+        }
+    }
+
+    // MARK: - 自動貼り付け（既定オフ）
+
+    /// 履歴から選んだあと ⌘V まで送るか。
+    var autoPastes: Bool {
+        didSet {
+            UserDefaults.standard.set(autoPastes, forKey: Self.autoPasteKey)
+            pasteFailure = nil
+            // 権限は「その機能を初めて使うとき」に要求する。
+            if autoPastes, !ClipboardPaster.hasPermission {
+                ClipboardPaster.requestPermission()
+                pasteFailure = .noPermission
+            }
+        }
+    }
+
+    /// 直近の貼り付けが失敗した理由。正常時は nil。
+    private(set) var pasteFailure: ClipboardPaster.Failure?
+
+    var needsAccessibilityPermission: Bool { pasteFailure == .noPermission }
+
+    func openAccessibilitySettings() {
+        ClipboardPaster.openPermissionSettings()
     }
 
     func clear() {
@@ -129,6 +169,25 @@ private struct ClipboardSectionView: View {
                 // 押しても出ない理由と対処を示す。
                 Text("⌥⌘V は他のアプリが使用中のため登録できません")
                     .metricCaptionStyle()
+            }
+
+            Toggle(isOn: Binding(
+                get: { module.autoPastes },
+                set: { module.autoPastes = $0 }
+            )) {
+                Text("選んだら自動で貼り付ける").metricLabelStyle()
+            }
+            .toggleStyle(.checkbox)
+
+            if let failure = module.pasteFailure {
+                Text(failure.message).metricCaptionStyle()
+            }
+
+            if module.needsAccessibilityPermission {
+                Button("システム設定を開く") {
+                    module.openAccessibilitySettings()
+                }
+                .buttonStyle(.accessoryBar)
             }
 
             if module.items.isEmpty {

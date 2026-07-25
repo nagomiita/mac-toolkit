@@ -94,8 +94,9 @@ final class ClipboardPanelController {
     }
 
     private func choose(_ item: ClipboardItem) {
-        module.restore(item)
+        // 先に閉じて、キー入力が元のアプリに戻ってから貼り付けを送る。
         hide()
+        module.restore(item, andPaste: true)
     }
 
     // MARK: - キー操作
