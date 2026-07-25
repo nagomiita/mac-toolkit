@@ -15,6 +15,7 @@ struct MacToolkitApp: App {
             ThermalModule(),
             NetworkSpeedModule(),
             WiFiModule(),
+            ClipboardModule(),
             ScreenshotModule(),
         ])
         registry.startAll()
