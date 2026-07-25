@@ -1,5 +1,6 @@
 import SwiftUI
 import Observation
+import Carbon.HIToolbox  // kVK_ANSI_V
 
 /// コピーした内容の履歴を残し、選んでクリップボードへ戻す。
 ///
@@ -22,7 +23,39 @@ final class ClipboardModule: ToolModule {
     /// 直前に戻した項目。押した手応えを返すために覚える。
     private var lastRestoredID: UUID?
 
+    /// ホットキーを登録できなかった（他アプリが押さえている等）。
+    private(set) var hotKeyFailed = false
+
+    /// パネルは初回に使うときだけ作る（常駐アプリなので使わない人の分は持たない）。
+    /// self を参照するため遅延生成にするが、`@Observable` の追跡対象からは外す。
+    @ObservationIgnored private var _panel: ClipboardPanelController?
+
+    private var panel: ClipboardPanelController {
+        if let _panel { return _panel }
+        let controller = ClipboardPanelController(module: self)
+        _panel = controller
+        return controller
+    }
+
+    /// 既定は ⌥⌘V。⌘⇧V はエディタのプレーンテキストペーストと衝突するため避ける。
+    private static let hotKeyName = "clipboard.panel"
+
+    func start() {
+        let registered = HotKeyCenter.shared.register(
+            name: Self.hotKeyName,
+            keyCode: UInt32(kVK_ANSI_V),
+            modifiers: [.command, .option]
+        ) { [weak self] in
+            self?.panel.toggle()
+        }
+        hotKeyFailed = !registered
+    }
+
     func stop() {
+        // 登録したまま残すとキーが他アプリに渡らなくなる。
+        HotKeyCenter.shared.unregister(name: Self.hotKeyName)
+        // 一度も開いていなければ作らない。
+        _panel?.hide()
         // 無効化したら履歴をメモリに残さない。
         history.clear()
         lastRestoredID = nil
@@ -51,6 +84,15 @@ final class ClipboardModule: ToolModule {
 
     func isRestored(_ item: ClipboardItem) -> Bool { lastRestoredID == item.id }
 
+    /// パネルを出す直前など、ティックを待たずに拾い直したいときに呼ぶ。
+    func refresh() {
+        tick()
+    }
+
+    func showPanel() {
+        panel.show()
+    }
+
     /// 選んだ項目をクリップボードへ戻す。
     func restore(_ item: ClipboardItem) {
         guard watcher.writeBack(item) else { return }
@@ -76,6 +118,19 @@ private struct ClipboardSectionView: View {
             systemImage: module.systemImage,
             summary: module.items.isEmpty ? nil : "\(module.items.count) 件"
         ) {
+            Button {
+                module.showPanel()
+            } label: {
+                Label("履歴を開く（⌥⌘V）", systemImage: "list.clipboard")
+            }
+            .buttonStyle(.accessoryBar)
+
+            if module.hotKeyFailed {
+                // 押しても出ない理由と対処を示す。
+                Text("⌥⌘V は他のアプリが使用中のため登録できません")
+                    .metricCaptionStyle()
+            }
+
             if module.items.isEmpty {
                 Text("コピーするとここに残ります").metricCaptionStyle()
             } else {
