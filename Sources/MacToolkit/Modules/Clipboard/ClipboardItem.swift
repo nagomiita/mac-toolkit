@@ -4,45 +4,86 @@ import AppKit
 ///
 /// 再コピー時に元の見た目を保つため、pasteboard に載っていた型を
 /// そのまま辞書で持ち、書き戻すときに全型をまとめて戻す。
-struct ClipboardItem: Identifiable, Sendable {
-    enum Kind: Sendable {
+///
+/// 画像だけは例外で、常駐アプリのメモリに数 MB を抱えないよう、
+/// 実データをディスクへ退避し（`blobURL`）メモリにはサムネイルだけ残す。
+struct ClipboardItem: Identifiable, Sendable, Codable {
+    enum Kind: String, Sendable, Codable {
         case text
         case fileURL
+        case rtf
+        case image
 
         var systemImage: String {
             switch self {
             case .text: return "text.alignleft"
             case .fileURL: return "doc"
+            case .rtf: return "doc.richtext"
+            case .image: return "photo"
             }
         }
     }
 
-    let id = UUID()
+    let id: UUID
     /// 型（UTType 文字列）→ 生データ。書き戻しにそのまま使う。
-    let payload: [String: Data]
+    /// 画像を退避したあとは空になり、代わりに `blobURL` を見る。
+    var payload: [String: Data]
     /// 一覧に出す 1 行のプレビュー。
     let preview: String
     let kind: Kind
     let copiedAt: Date
-    /// コピー元アプリの bundle ID。除外リストの判定と表示に使う。
+    /// コピー元アプリの bundle ID。除外リストの判定に使う。
     let sourceBundleID: String?
     /// サイズ上限を超えたため中身を保持していない。プレビューだけ出す。
     let isTruncated: Bool
+    /// 退避した画像の実データの場所。`payload` の代わりに書き戻しへ使う。
+    var blobURL: URL?
+    /// 一覧に出す縮小画像（PNG）。NSImage を持つと Sendable でなくなるのでバイト列で持つ。
+    var thumbnailPNG: Data?
+
+    init(
+        id: UUID = UUID(),
+        payload: [String: Data],
+        preview: String,
+        kind: Kind,
+        copiedAt: Date,
+        sourceBundleID: String?,
+        isTruncated: Bool,
+        blobURL: URL? = nil,
+        thumbnailPNG: Data? = nil
+    ) {
+        self.id = id
+        self.payload = payload
+        self.preview = preview
+        self.kind = kind
+        self.copiedAt = copiedAt
+        self.sourceBundleID = sourceBundleID
+        self.isTruncated = isTruncated
+        self.blobURL = blobURL
+        self.thumbnailPNG = thumbnailPNG
+    }
 
     /// 同じ内容を続けてコピーしたときに重複させないための比較キー。
-    var dedupeKey: String { "\(kind)\u{1}\(preview)" }
+    var dedupeKey: String { "\(kind.rawValue)\u{1}\(preview)" }
+
+    /// 中身を持っていて書き戻せるか。
+    var isRestorable: Bool {
+        !isTruncated && (!payload.isEmpty || blobURL != nil)
+    }
 }
 
 // MARK: - pasteboard との相互変換
 
 extension ClipboardItem {
-    /// 1 項目あたりのデータ上限。これを超えるものはプレビューだけ残す。
+    /// テキスト系 1 項目あたりのメモリ上限。これを超えるものはプレビューだけ残す。
+    /// 画像はディスクへ退避するのでこの制限を受けない。
     static let maxPayloadBytes = 1024 * 1024
 
-    /// 履歴に載せる型。この順に見て最初に取れたものを種別とする。
-    /// RTF・画像は PR3 で足す。
-    private static let textType = NSPasteboard.PasteboardType.string.rawValue
-    private static let fileURLType = NSPasteboard.PasteboardType.fileURL.rawValue
+    static let textType = NSPasteboard.PasteboardType.string.rawValue
+    static let fileURLType = NSPasteboard.PasteboardType.fileURL.rawValue
+    static let rtfType = NSPasteboard.PasteboardType.rtf.rawValue
+    static let pngType = NSPasteboard.PasteboardType.png.rawValue
+    static let tiffType = NSPasteboard.PasteboardType.tiff.rawValue
 
     /// 履歴に載せてはいけない型。
     ///
@@ -57,6 +98,8 @@ extension ClipboardItem {
     /// pasteboard の現在の中身から履歴項目を作る。
     ///
     /// 履歴に載せない場合（機密フラグ付き、対応する型が無い、空）は nil。
+    /// 画像はここでは生データを抱えたまま返し、退避とサムネイル生成は
+    /// 呼び出し側が `Task.detached` で行う（tick を長く止めないため）。
     static func read(
         from pasteboard: NSPasteboard,
         sourceBundleID: String?,
@@ -69,21 +112,33 @@ extension ClipboardItem {
 
         let kind: Kind
         let preview: String
+        // 種別は「具体的なものから先に」見る。画像には TIFF と一緒に
+        // ファイル名のテキストが載ることがあり、テキストを先に見ると取り違える。
         if let url = pasteboard.string(forType: .fileURL).flatMap(URL.init(string:)) {
             kind = .fileURL
             preview = url.path
+        } else if types.contains(pngType) || types.contains(tiffType) {
+            kind = .image
+            preview = "画像"
         } else if let text = pasteboard.string(forType: .string) {
             // 空白だけのコピーは履歴を汚すだけなので載せない。
             guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
-            kind = .text
-            preview = Self.makePreview(from: text)
+            // 書式付きテキストは RTF も一緒に持ち帰り、貼り直しても書式を失わないようにする。
+            kind = types.contains(rtfType) ? .rtf : .text
+            preview = makePreview(from: text)
         } else {
-            // 画像など未対応の型しか無い場合は静かに無視する。
             return nil
         }
 
         // 書き戻しに使う型だけを持つ。装飾的な型まで抱えるとメモリが膨らむ。
-        let wanted = [textType, fileURLType]
+        let wanted: [String]
+        switch kind {
+        case .text: wanted = [textType]
+        case .rtf: wanted = [rtfType, textType]
+        case .fileURL: wanted = [fileURLType, textType]
+        case .image: wanted = [pngType, tiffType]
+        }
+
         var payload: [String: Data] = [:]
         var total = 0
         for type in wanted where types.contains(type) {
@@ -91,8 +146,10 @@ extension ClipboardItem {
             total += data.count
             payload[type] = data
         }
+        guard !payload.isEmpty else { return nil }
 
-        let truncated = total > maxPayloadBytes
+        // 画像はディスクへ逃がすので上限を当てない。
+        let truncated = kind != .image && total > maxPayloadBytes
         return ClipboardItem(
             payload: truncated ? [:] : payload,
             preview: preview,
@@ -104,10 +161,20 @@ extension ClipboardItem {
     }
 
     /// 履歴から選ばれたときに pasteboard へ戻す。
-    /// 中身を持っていない（上限超過）場合は何もせず false を返す。
+    /// 中身を持っていない（上限超過・退避先が消えた）場合は false。
     @discardableResult
     func writeBack(to pasteboard: NSPasteboard) -> Bool {
-        guard !isTruncated, !payload.isEmpty else { return false }
+        guard !isTruncated else { return false }
+
+        // 画像は退避先から読み直す。読めなければ何も壊さず諦める。
+        if let blobURL, payload.isEmpty {
+            guard let data = try? Data(contentsOf: blobURL) else { return false }
+            pasteboard.clearContents()
+            pasteboard.setData(data, forType: .init(Self.pngType))
+            return true
+        }
+
+        guard !payload.isEmpty else { return false }
         pasteboard.clearContents()
         for (type, data) in payload {
             pasteboard.setData(data, forType: .init(type))

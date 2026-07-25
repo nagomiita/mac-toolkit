@@ -153,6 +153,27 @@ private struct ClipboardSectionView: View {
     }
 }
 
+/// 種別のアイコン。画像だけはサムネイルそのものを出す
+/// （中身が見えないと、どの画像か区別できないため）。
+struct ClipboardItemIcon: View {
+    let item: ClipboardItem
+    var size: CGFloat = 12
+
+    var body: some View {
+        if let data = item.thumbnailPNG, let image = NSImage(data: data) {
+            Image(nsImage: image)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .frame(width: size + 2, height: size + 2)
+                .clipShape(RoundedRectangle(cornerRadius: 2))
+        } else {
+            Image(systemName: item.kind.systemImage)
+                .font(.system(size: size - 1))
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
 private struct ClipboardRow: View {
     let item: ClipboardItem
     let isRestored: Bool
@@ -161,9 +182,7 @@ private struct ClipboardRow: View {
     var body: some View {
         Button(action: action) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Image(systemName: item.kind.systemImage)
-                    .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
+                ClipboardItemIcon(item: item, size: 12)
                     // 見出しのアイコンと左端を揃える。
                     .frame(width: 14, alignment: .center)
 
@@ -172,7 +191,7 @@ private struct ClipboardRow: View {
                         .metricLabelStyle()
                         .lineLimit(1)
                         .truncationMode(.middle)
-                    if item.isTruncated {
+                    if !item.isRestorable {
                         // 押しても何も起きない理由を必ず示す。
                         Text("大きすぎるため戻せません").metricCaptionStyle()
                     }
@@ -188,7 +207,7 @@ private struct ClipboardRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(item.isTruncated)
+        .disabled(!item.isRestorable)
         .help(item.preview)
     }
 }

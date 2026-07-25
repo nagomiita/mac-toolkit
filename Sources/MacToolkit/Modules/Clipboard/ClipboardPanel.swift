@@ -254,16 +254,14 @@ private struct PanelRow: View {
     var body: some View {
         Button(action: action) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Image(systemName: item.kind.systemImage)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 14)
+                ClipboardItemIcon(item: item, size: 22)
+                    .frame(width: 24)
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(item.preview)
                         .font(.system(.callout))
                         .lineLimit(2)
-                    if item.isTruncated {
+                    if !item.isRestorable {
                         Text("大きすぎるため戻せません").metricCaptionStyle()
                     }
                 }
@@ -280,6 +278,6 @@ private struct PanelRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(item.isTruncated)
+        .disabled(!item.isRestorable)
     }
 }
