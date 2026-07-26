@@ -62,7 +62,7 @@ final class HotKeyCenter {
             keyCode,
             modifiers.rawValue,
             hotKeyID,
-            GetEventDispatcherTarget(),
+            GetApplicationEventTarget(),
             0,
             &ref
         )
@@ -104,7 +104,7 @@ final class HotKeyCenter {
         )
         var ref: EventHandlerRef?
         let status = InstallEventHandler(
-            GetEventDispatcherTarget(),
+            GetApplicationEventTarget(),
             hotKeyEventHandler,
             1,
             &spec,
