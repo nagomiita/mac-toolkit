@@ -12,6 +12,7 @@ import Carbon.HIToolbox  // kVK_* のキーコード定数
 final class ClipboardPanelController {
     private var panel: NSPanel?
     private var keyMonitor: Any?
+    private var resignObserver: (any NSObjectProtocol)?
     private let state = PanelState()
 
     private unowned let module: ClipboardModule
@@ -39,11 +40,33 @@ final class ClipboardPanelController {
         position(panel)
         panel.makeKeyAndOrderFront(nil)
         installKeyMonitor()
+        observeResignKey(panel)
     }
 
     func hide() {
         removeKeyMonitor()
+        removeResignObserver()
         panel?.orderOut(nil)
+    }
+
+    /// パネルの外（他のアプリや他のウィンドウ）をクリックしたら閉じる。
+    ///
+    /// メニューと同じ振る舞いにする。閉じるためにパネルまで戻って
+    /// ボタンを押させるのは手数が多い。
+    private func observeResignKey(_ panel: NSPanel) {
+        guard resignObserver == nil else { return }
+        resignObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didResignKeyNotification,
+            object: panel,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.hide() }
+        }
+    }
+
+    private func removeResignObserver() {
+        if let resignObserver { NotificationCenter.default.removeObserver(resignObserver) }
+        resignObserver = nil
     }
 
     // MARK: - 組み立て
@@ -211,15 +234,19 @@ private struct ClipboardPanelView: View {
                             isSelected: index == state.selection,
                             action: { onChoose(item) }
                         )
-                        .id(index)
+                        // スクロール位置の指定にも項目の id を使う。ここに index を
+                        // 与えると ForEach の id と食い違い、行の中身が前の項目の
+                        // まま更新されない（サムネイルが全部同じになる）。
+                        .id(item.id)
                         // マウスを動かしただけで選択が飛ぶと、キーボードで
                         // 選んでいる最中に邪魔になるのでホバーでは変えない。
                     }
                 }
                 .padding(6)
             }
-            .onChange(of: state.selection) { _, new in
-                proxy.scrollTo(new, anchor: .center)
+            .onChange(of: state.selection) { _, _ in
+                guard let id = state.selectedItem?.id else { return }
+                proxy.scrollTo(id, anchor: .center)
             }
         }
     }
@@ -255,8 +282,9 @@ private struct PanelRow: View {
     var body: some View {
         Button(action: action) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                ClipboardItemIcon(item: item, size: 22)
-                    .frame(width: 24)
+                // 画像はどれなのか中身で見分けたいので大きめに出す。
+                ClipboardItemIcon(item: item, size: item.kind == .image ? 44 : 22)
+                    .frame(width: 46)
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(item.preview)
@@ -274,8 +302,10 @@ private struct PanelRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(isSelected ? AnyShapeStyle(.selection) : AnyShapeStyle(.clear))
+                    .fill(isSelected ? AnyShapeStyle(.tint) : AnyShapeStyle(.clear))
             )
+            // 選択中は塗りの上に載るので、文字の色を反転させて読めるようにする。
+            .foregroundStyle(isSelected ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
