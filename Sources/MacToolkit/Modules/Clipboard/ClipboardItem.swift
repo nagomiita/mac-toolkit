@@ -1,4 +1,5 @@
 import AppKit
+import ImageIO
 
 /// 履歴 1 件分。
 ///
@@ -205,6 +206,18 @@ extension ClipboardItem {
             pasteboard.setData(data, forType: .init(type))
         }
         return true
+    }
+
+    /// 編集窓で開くための画像。退避済みならディスクから読み直す。
+    func loadImage() -> CGImage? {
+        let data: Data?
+        if let blobURL, payload.isEmpty {
+            data = try? Data(contentsOf: blobURL)
+        } else {
+            data = payload[Self.pngType] ?? payload[Self.tiffType]
+        }
+        guard let data, let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        return CGImageSourceCreateImageAtIndex(source, 0, nil)
     }
 
     /// 改行を潰して 1 行に畳む。長すぎるものは切る。

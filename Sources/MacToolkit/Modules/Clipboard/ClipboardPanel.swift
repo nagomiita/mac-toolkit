@@ -95,6 +95,7 @@ final class ClipboardPanelController {
             rootView: ClipboardPanelView(
                 state: state,
                 onChoose: { [weak self] item in self?.choose(item) },
+                onEdit: { [weak self] item in self?.edit(item) },
                 onClose: { [weak self] in self?.hide() }
             )
         )
@@ -116,6 +117,11 @@ final class ClipboardPanelController {
         )
     }
 
+    private func edit(_ item: ClipboardItem) {
+        hide()
+        module.edit(item)
+    }
+
     private func choose(_ item: ClipboardItem) {
         // 先に閉じて、キー入力が元のアプリに戻ってから貼り付けを送る。
         hide()
@@ -134,7 +140,8 @@ final class ClipboardPanelController {
             guard let self else { return event }
             // NSEvent 自体は Sendable でないので、境界を越えるのはキーコードだけにする。
             let keyCode = Int(event.keyCode)
-            let consumed = MainActor.assumeIsolated { self.handle(keyCode: keyCode) }
+            let command = event.modifierFlags.contains(.command)
+            let consumed = MainActor.assumeIsolated { self.handle(keyCode: keyCode, command: command) }
             return consumed ? nil : event
         }
     }
@@ -145,9 +152,18 @@ final class ClipboardPanelController {
     }
 
     /// 処理したら true（そのキーは他へ渡さない）。
-    private func handle(keyCode: Int) -> Bool {
+    private func handle(keyCode: Int, command: Bool) -> Bool {
         // 開いていないときのキー入力には触らない。
         guard isVisible else { return false }
+
+        // ⌘E で選択中の画像を編集窓へ。
+        if command, keyCode == kVK_ANSI_E {
+            if let item = state.selectedItem, item.kind == .image {
+                edit(item)
+                return true
+            }
+            return false
+        }
 
         switch keyCode {
         case kVK_Escape:
@@ -193,6 +209,7 @@ private final class PanelState {
 private struct ClipboardPanelView: View {
     @Bindable var state: PanelState
     let onChoose: (ClipboardItem) -> Void
+    let onEdit: (ClipboardItem) -> Void
     let onClose: () -> Void
 
     var body: some View {
@@ -232,7 +249,8 @@ private struct ClipboardPanelView: View {
                         PanelRow(
                             item: item,
                             isSelected: index == state.selection,
-                            action: { onChoose(item) }
+                            action: { onChoose(item) },
+                            onEdit: { onEdit(item) }
                         )
                         // スクロール位置の指定にも項目の id を使う。ここに index を
                         // 与えると ForEach の id と食い違い、行の中身が前の項目の
@@ -264,6 +282,7 @@ private struct ClipboardPanelView: View {
         HStack(spacing: 10) {
             Text("↑↓ で選ぶ").metricCaptionStyle()
             Text("Return でコピー").metricCaptionStyle()
+            Text("⌘E で画像を編集").metricCaptionStyle()
             Spacer()
             Button("閉じる", action: onClose)
                 .buttonStyle(.accessoryBar)
@@ -278,6 +297,7 @@ private struct PanelRow: View {
     let item: ClipboardItem
     let isSelected: Bool
     let action: () -> Void
+    let onEdit: () -> Void
 
     var body: some View {
         Button(action: action) {
@@ -296,6 +316,16 @@ private struct PanelRow: View {
                 }
 
                 Spacer(minLength: 8)
+
+                // 画像は囲みやマーカーを引いてから使いたいことがある。
+                if item.kind == .image {
+                    Button(action: onEdit) {
+                        Image(systemName: "pencil.tip.crop.circle")
+                            .font(.system(size: 14))
+                    }
+                    .buttonStyle(.plain)
+                    .help("編集（⌘E）")
+                }
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 6)

@@ -139,6 +139,12 @@ final class ClipboardModule: ToolModule {
         ClipboardPaster.openPermissionSettings()
     }
 
+    /// 画像の項目を編集窓で開く。囲みやマーカーを引いてコピーし直せる。
+    func edit(_ item: ClipboardItem) {
+        guard item.kind == .image, let image = item.loadImage() else { return }
+        ScreenshotEditor.open(image: image)
+    }
+
     func clear() {
         history.clear()
         // 消した直後の内容を拾い直さないよう起点を取り直す。
