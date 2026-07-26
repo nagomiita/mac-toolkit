@@ -28,16 +28,23 @@ struct ClipboardItem: Identifiable, Sendable, Codable {
     /// 型（UTType 文字列）→ 生データ。書き戻しにそのまま使う。
     /// 画像を退避したあとは空になり、代わりに `blobURL` を見る。
     var payload: [String: Data]
-    /// 一覧に出す 1 行のプレビュー。
-    let preview: String
+    /// 一覧に出す 1 行のプレビュー。画像は退避後に大きさを添える。
+    var preview: String
     let kind: Kind
     let copiedAt: Date
     /// コピー元アプリの bundle ID。除外リストの判定に使う。
     let sourceBundleID: String?
     /// サイズ上限を超えたため中身を保持していない。プレビューだけ出す。
     let isTruncated: Bool
+    /// 取り込んだときのデータ量。画像の重複判定に使う。
+    var byteCount: Int = 0
     /// 退避した画像の実データの場所。`payload` の代わりに書き戻しへ使う。
     var blobURL: URL?
+    /// 退避先に書いた形式。取り違えると貼り付け先が壊れた画像を受け取る。
+    var blobType: String?
+    /// 元画像の大きさ。一覧に「3840×2160」と添えるため。
+    var pixelWidth: Int?
+    var pixelHeight: Int?
     /// 一覧に出す縮小画像（PNG）。NSImage を持つと Sendable でなくなるのでバイト列で持つ。
     var thumbnailPNG: Data?
 
@@ -49,7 +56,11 @@ struct ClipboardItem: Identifiable, Sendable, Codable {
         copiedAt: Date,
         sourceBundleID: String?,
         isTruncated: Bool,
+        byteCount: Int = 0,
         blobURL: URL? = nil,
+        blobType: String? = nil,
+        pixelWidth: Int? = nil,
+        pixelHeight: Int? = nil,
         thumbnailPNG: Data? = nil
     ) {
         self.id = id
@@ -59,12 +70,24 @@ struct ClipboardItem: Identifiable, Sendable, Codable {
         self.copiedAt = copiedAt
         self.sourceBundleID = sourceBundleID
         self.isTruncated = isTruncated
+        self.byteCount = byteCount
         self.blobURL = blobURL
+        self.blobType = blobType
+        self.pixelWidth = pixelWidth
+        self.pixelHeight = pixelHeight
         self.thumbnailPNG = thumbnailPNG
     }
 
     /// 同じ内容を続けてコピーしたときに重複させないための比較キー。
-    var dedupeKey: String { "\(kind.rawValue)\u{1}\(preview)" }
+    ///
+    /// 画像は表示名が「画像 1920×1080」のように大きさしか持たないため、
+    /// これで比べると別々のスクリーンショットが同じ 1 件に潰れる。
+    /// データ量を混ぜて、撮り直した別の画像を別物として扱う。
+    var dedupeKey: String {
+        kind == .image
+            ? "image\u{1}\(byteCount)\u{1}\(pixelWidth ?? 0)x\(pixelHeight ?? 0)"
+            : "\(kind.rawValue)\u{1}\(preview)"
+    }
 
     /// 中身を持っていて書き戻せるか。
     var isRestorable: Bool {
@@ -156,7 +179,8 @@ extension ClipboardItem {
             kind: kind,
             copiedAt: now,
             sourceBundleID: sourceBundleID,
-            isTruncated: truncated
+            isTruncated: truncated,
+            byteCount: total
         )
     }
 
@@ -170,7 +194,8 @@ extension ClipboardItem {
         if let blobURL, payload.isEmpty {
             guard let data = try? Data(contentsOf: blobURL) else { return false }
             pasteboard.clearContents()
-            pasteboard.setData(data, forType: .init(Self.pngType))
+            // 退避時に実際に書いた形式で戻す。PNG と偽ると貼り付け先が壊れる。
+            pasteboard.setData(data, forType: .init(blobType ?? Self.pngType))
             return true
         }
 

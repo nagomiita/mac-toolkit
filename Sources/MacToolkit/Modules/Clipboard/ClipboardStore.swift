@@ -73,18 +73,76 @@ struct ClipboardStore: Sendable {
         try? FileManager.default.removeItem(at: blobDirectory)
     }
 
+    /// 退避した画像の情報。
+    struct StoredImage: Sendable {
+        let blobURL: URL
+        /// 退避先に実際に書いた形式（UTType 文字列）。書き戻すときの型に使う。
+        let type: String
+        let thumbnailPNG: Data?
+        let pixelWidth: Int?
+        let pixelHeight: Int?
+    }
+
     /// 画像データをディスクへ退避し、置き場所とサムネイルを返す。
     /// 失敗したら nil（呼び出し側はメモリに持ったままにする）。
-    func storeImage(_ data: Data, id: UUID) -> (blobURL: URL, thumbnailPNG: Data?)? {
+    ///
+    /// スクリーンショットは TIFF で来ることが多く、そのまま持つと
+    /// 数十 MB になるうえ書き戻す型も取り違えるので、PNG に変換して統一する。
+    func storeImage(_ data: Data, id: UUID) -> StoredImage? {
         do {
             try FileManager.default.createDirectory(at: blobDirectory, withIntermediateDirectories: true)
             let url = blobDirectory.appendingPathComponent("\(id.uuidString).png")
-            try data.write(to: url, options: .atomic)
-            return (url, Self.makeThumbnail(from: data))
+            // 変換できない形式なら諦めて元のバイト列を書く（書き戻しは元の型で行う）。
+            let png = Self.convertToPNG(data)
+            try (png ?? data).write(to: url, options: .atomic)
+            let size = Self.pixelSize(of: data)
+            return StoredImage(
+                blobURL: url,
+                type: png != nil ? UTType.png.identifier : Self.sourceType(of: data),
+                thumbnailPNG: Self.makeThumbnail(from: data),
+                pixelWidth: size?.width,
+                pixelHeight: size?.height
+            )
         } catch {
             NSLog("[clipboard] failed to store image blob: \(error)")
             return nil
         }
+    }
+
+    /// 変換できなかったときに、元のバイト列が何であるかを返す。
+    static func sourceType(of data: Data) -> String {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let type = CGImageSourceGetType(source)
+        else { return UTType.tiff.identifier }
+        return type as String
+    }
+
+    /// 元の縦横のピクセル数。一覧に「3840×2160」と出すために使う。
+    static func pixelSize(of data: Data) -> (width: Int, height: Int)? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let width = props[kCGImagePropertyPixelWidth] as? Int,
+              let height = props[kCGImagePropertyPixelHeight] as? Int
+        else { return nil }
+        return (width, height)
+    }
+
+    /// TIFF などを PNG にする。変換できなければ nil。
+    static func convertToPNG(_ data: Data) -> Data? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let type = CGImageSourceGetType(source)
+        else { return nil }
+        // 既に PNG なら変換しない。
+        if (type as String) == UTType.png.identifier { return data }
+
+        guard let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return nil }
+        let output = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(
+            output, UTType.png.identifier as CFString, 1, nil
+        ) else { return nil }
+        CGImageDestinationAddImage(destination, image, nil)
+        guard CGImageDestinationFinalize(destination) else { return nil }
+        return output as Data
     }
 
     func removeBlob(at url: URL) {

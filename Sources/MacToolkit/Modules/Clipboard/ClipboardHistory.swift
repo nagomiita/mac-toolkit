@@ -123,7 +123,14 @@ final class ClipboardHistory {
                 guard let stored else { return }  // 失敗時はメモリに持ったままにする
                 self.items[index].payload = [:]
                 self.items[index].blobURL = stored.blobURL
+                self.items[index].blobType = stored.type
                 self.items[index].thumbnailPNG = stored.thumbnailPNG
+                self.items[index].pixelWidth = stored.pixelWidth
+                self.items[index].pixelHeight = stored.pixelHeight
+                // 大きさが分かってから「画像 3840×2160」に差し替える。
+                if let w = stored.pixelWidth, let h = stored.pixelHeight {
+                    self.items[index].preview = "画像 \(w)×\(h)"
+                }
             }
         }
     }
