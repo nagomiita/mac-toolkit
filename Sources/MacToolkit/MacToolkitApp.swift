@@ -17,6 +17,7 @@ struct MacToolkitApp: App {
             WiFiModule(),
             ClipboardModule(),
             ScreenshotModule(),
+            RecordingModule(),
         ])
         registry.startAll()
         _registry = State(initialValue: registry)

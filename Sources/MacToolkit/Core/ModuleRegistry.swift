@@ -28,7 +28,9 @@ final class ModuleRegistry {
     private static let enabledKey = "enabledModuleIDs"
     private static let menuBarKey = "menuBarModuleIDs"
     private static let intervalKey = "sampleInterval"
-    private static let defaultMenuBarIDs: Set<String> = ["cpu", "network"]
+    /// recording は録画中しか描画しない（待機中は statusItemView が nil）ので、
+    /// 既定に入れても平常時のメニューバーの幅は変わらない。
+    private static let defaultMenuBarIDs: Set<String> = ["cpu", "network", "recording"]
 
     init(modules: [any ToolModule]) {
         let saved = UserDefaults.standard.double(forKey: Self.intervalKey)

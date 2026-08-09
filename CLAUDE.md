@@ -81,4 +81,5 @@ IOKit / SMC / GPU 統計は機種・OS で普通に取得できない。
 - メニューバー本体は幅が揺れないことを最優先。数値は `.monospacedDigit()`、単位込みで桁数を固定
 - `MenuBarExtra` は `.menuBarExtraStyle(.window)`
 - ポップオーバーは 1 モジュール 1 セクションを縦に並べるだけ
-- 既定でメニューバーに数値を出すのは CPU とネットワークのみ（`ModuleRegistry.defaultMenuBarIDs`）
+- 既定でメニューバーに数値を出すのは CPU とネットワークのみ（`ModuleRegistry.defaultMenuBarIDs`）。
+  録画は既定に入っているが、録画中しか描画しないので平常時の幅には影響しない

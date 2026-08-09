@@ -17,6 +17,8 @@
 	<!-- 権限の説明もユーザーに見えるので日本語で書く -->
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>接続中の Wi-Fi ネットワーク名（SSID）を表示するために使用します。位置情報の記録や送信は行いません。</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>画面録画に自分の声を含めるために使用します。録音は Mac 内に保存され、送信は行いません。</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
 	<!-- Dock とアプリスイッチャーに出さず、メニューバーのみに常駐させる -->
