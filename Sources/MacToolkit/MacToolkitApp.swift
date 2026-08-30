@@ -18,6 +18,7 @@ struct MacToolkitApp: App {
             ClipboardModule(),
             ScreenshotModule(),
             RecordingModule(),
+            RemoteInputModule(),
         ])
         registry.startAll()
         _registry = State(initialValue: registry)
