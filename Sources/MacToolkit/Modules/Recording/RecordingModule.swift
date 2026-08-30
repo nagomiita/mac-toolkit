@@ -41,7 +41,10 @@ final class RecordingModule: ToolModule {
 
     @ObservationIgnored private let recorder = ScreenRecorder()
     /// 開始・停止の非同期処理が走っている間の二重操作を防ぐ。
-    @ObservationIgnored private var isBusy = false
+    ///
+    /// ストリームの開始には数秒かかることがある。その間ボタンの見た目が
+    /// 変わらないと「押せていない」ように見えるので、UI から読めるようにする。
+    private(set) var isBusy = false
 
     private static let hotKeyName = "recording.toggle"
     private static let micKey = "recording.capturesMicrophone"
@@ -141,6 +144,25 @@ final class RecordingModule: ToolModule {
         }
     }
 
+    /// アプリを再起動する。
+    ///
+    /// 画面収録の許可は、承認した時点では動いているプロセスに反映されない。
+    /// また ad-hoc 署名は再インストールのたびに変わるため、
+    /// `install.sh` の後は毎回この再承認＋再起動が必要になる。
+    func relaunch() {
+        guard !isRecording else { return }
+        let configuration = NSWorkspace.OpenConfiguration()
+        // 現プロセスを終了する前に新しいインスタンスを立てる。
+        configuration.createsNewApplicationInstance = true
+        NSWorkspace.shared.openApplication(
+            at: Bundle.main.bundleURL, configuration: configuration
+        ) { _, _ in
+            Task { @MainActor in
+                NSApplication.shared.terminate(nil)
+            }
+        }
+    }
+
     /// 直近のファイルを Finder で選択状態にする。
     func revealLastOutput() {
         guard let lastOutput else { return }
@@ -212,24 +234,43 @@ private struct RecordingSectionView: View {
             Button {
                 module.toggle()
             } label: {
-                if module.isRecording {
+                if module.isBusy {
+                    // 開始・停止の待ち時間を無反応に見せない。
+                    Label("準備中…", systemImage: "hourglass")
+                } else if module.isRecording {
                     Label("録画を停止", systemImage: "stop.circle")
                 } else {
                     Label("録画を開始", systemImage: "record.circle")
                 }
             }
             .buttonStyle(.accessoryBar)
+            .disabled(module.isBusy)
 
             Text(module.hotKeyFailed ? "⌥⌘R は他のアプリが使用中" : "⌥⌘R で開始と停止")
                 .metricCaptionStyle()
 
             if let message = module.message {
-                Text(message).metricCaptionStyle()
+                // 権限切れは見落とすと「押しても無反応」に見えるので、
+                // 補足文と同じ灰色ではなく警告として出す。
+                Label(message, systemImage: "exclamationmark.triangle.fill")
+                    .font(.system(.caption, weight: .medium))
+                    .foregroundStyle(
+                        module.needsPermission
+                            ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary)
+                    )
             }
 
             if module.needsPermission {
-                Button("システム設定を開く") {
-                    ScreenCapturer.openPermissionSettings()
+                Text("許可した後はアプリの再起動が必要。再インストール後も再承認が要る")
+                    .metricCaptionStyle()
+
+                HStack(spacing: 6) {
+                    Button("システム設定を開く") {
+                        ScreenCapturer.openPermissionSettings()
+                    }
+                    Button("再起動") {
+                        module.relaunch()
+                    }
                 }
                 .buttonStyle(.accessoryBar)
             }

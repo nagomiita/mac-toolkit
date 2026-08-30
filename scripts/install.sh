@@ -22,3 +22,7 @@ codesign --force --sign - "$DEST"
 
 open "$DEST"
 echo "installed and launched: $DEST"
+# ad-hoc signature changes on every build, so TCC treats this as a new app and
+# drops the Screen Recording approval. Screenshot and recording stay dead until
+# the checkbox is re-enabled AND the app is relaunched.
+echo "note: re-approve Screen Recording in System Settings, then relaunch the app"
