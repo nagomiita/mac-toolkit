@@ -14,10 +14,16 @@ final class NetworkSpeedModule: ToolModule {
     /// 監視中のインターフェース名。取得できない（オフライン）ときは nil。
     private(set) var interfaceName: String?
 
+    /// 直近 10 分に出た最大ダウンロード速度。回線の速さの判定に使う。
+    private(set) var peakDownloadRate: Double?
+    /// 回線の速さ。材料が足りなければ nil。
+    private(set) var rating: ThroughputRating?
+
     private let counters = InterfaceCounters()
     private var previous: InterfaceCounters.Sample?
     private var previousInterface: String?
     private var lastSampledAt: Date?
+    private var peakWindow = PeakWindow()
 
     func stop() {
         previous = nil
@@ -25,6 +31,13 @@ final class NetworkSpeedModule: ToolModule {
         lastSampledAt = nil
         downloadRate = 0
         uploadRate = 0
+        resetPeak()
+    }
+
+    private func resetPeak() {
+        peakWindow.reset()
+        peakDownloadRate = nil
+        rating = nil
     }
 
     func tick() {
@@ -40,6 +53,8 @@ final class NetworkSpeedModule: ToolModule {
             previous = nil
             downloadRate = 0
             uploadRate = 0
+            // オフラインの間の 0 を「遅い回線」として残さない。
+            resetPeak()
             return
         }
 
@@ -51,6 +66,8 @@ final class NetworkSpeedModule: ToolModule {
             previousInterface = name
             downloadRate = 0
             uploadRate = 0
+            // 有線で出た値で Wi-Fi を判定してしまわないよう、切り替わりで捨てる。
+            resetPeak()
             return
         }
 
@@ -64,6 +81,12 @@ final class NetworkSpeedModule: ToolModule {
 
         previous = current
         previousInterface = name
+
+        // 判定は下り基準。上りは回線の契約上そもそも細いことが多く、
+        // 「遅い」と読ませてしまう。
+        peakWindow.record(downloadRate, at: now)
+        peakDownloadRate = peakWindow.peak
+        rating = ThroughputRating.rating(peakBytesPerSecond: peakDownloadRate)
     }
 
     /// カウンタは 2^32 で折り返し、インターフェースの up/down でもリセットされる。
@@ -110,11 +133,56 @@ final class NetworkSpeedModule: ToolModule {
                         label: "アップロード",
                         value: ByteRate.format(bytesPerSecond: uploadRate)
                     )
+
+                    if let peakDownloadRate {
+                        MetricRow(
+                            label: "直近の最大",
+                            value: ByteRate.format(bytesPerSecond: peakDownloadRate)
+                        )
+                    }
+
+                    if let rating {
+                        RatingRow(rating: rating)
+                        Text("直近 10 分の最大値から判定").metricCaptionStyle()
+                    } else {
+                        Text("判定するには通信量が足りません").metricCaptionStyle()
+                    }
+
                     Text("インターフェース \(interfaceName)").metricCaptionStyle()
                 } else {
                     Text("接続されていません").metricCaptionStyle()
                 }
             }
         )
+    }
+}
+
+/// 回線の速さを、色付きの丸と語で示す。
+///
+/// 数値の行と違い「良し悪し」を伝えるのが目的なので、
+/// 信号強度（`MeterBar`）と同じく色を先に読ませる。
+private struct RatingRow: View {
+    let rating: ThroughputRating
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text("回線の速さ").metricLabelStyle()
+            Spacer(minLength: 12)
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(color)
+                    .frame(width: 7, height: 7)
+                Text(rating.label)
+            }
+            .metricValueStyle()
+        }
+    }
+
+    private var color: Color {
+        switch rating {
+        case .slow: .red
+        case .normal: .yellow
+        case .fast: .green
+        }
     }
 }
