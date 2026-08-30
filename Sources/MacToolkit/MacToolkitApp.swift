@@ -61,6 +61,7 @@ private struct MenuBarLabelView: View {
 
 private struct MenuBarContentView: View {
     let registry: ModuleRegistry
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         VStack(alignment: .leading, spacing: Metrics.sectionSpacing) {
@@ -94,8 +95,12 @@ private struct MenuBarContentView: View {
 
     private var footer: some View {
         HStack {
-            SettingsLink {
-                Text("設定…")
+            // SettingsLink はアプリをアクティブ化しないため、Dock に出ない
+            // accessory アプリでは設定ウィンドウが背面に埋もれて見えない。
+            // 先にアクティブ化してから openSettings で前面に開く。
+            Button("設定…") {
+                NSApplication.shared.activate()
+                openSettings()
             }
             Spacer()
             Button("終了") {
