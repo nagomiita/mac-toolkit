@@ -19,6 +19,7 @@ struct MacToolkitApp: App {
             ScreenshotModule(),
             RecordingModule(),
             RemoteInputModule(),
+            LidSleepModule(),
         ])
         registry.startAll()
         _registry = State(initialValue: registry)

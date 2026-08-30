@@ -101,6 +101,8 @@ IOKit / SMC / GPU 統計は**機種・OS バージョンによって普通に取
 | ホットキー | 不要（Carbon の `RegisterEventHotKey` を使うため。`Core/HotKeyCenter.swift`） |
 | クリップボード履歴の自動貼り付け | アクセシビリティ（既定オフのオプトイン） |
 | RDP 入力の英数・かな切り替え | 不要（CGEventTap ではなく、対象アプリが前面の間だけ `RegisterEventHotKey` で英数・かなを横取りする。前面アプリの変化は `NSWorkspace` の通知で拾う） |
+| スリープ抑止の切り替え | root（`pmset -a disablesleep`）。初回セットアップで `/etc/sudoers.d/mac-toolkit` に「この 2 コマンド完全一致のみ NOPASSWD」のルールを置き、以後はパスワードなしで切り替える。ルールの導入・解除だけ管理者パスワードのダイアログを出す。状態の読み取りは root 不要（`IOPMCopySystemPowerSettings` を dlsym で解決） |
+| スリープ抑止の自動オフ通知 | 通知（provisional。ダイアログを出さず通知センターにのみ静かに届く） |
 
 - **権限は「その機能を初めて使うとき」に要求する。** 起動直後にまとめて要求しない
 - 未許可でも**アプリ全体は正常に動く**こと。該当モジュールだけが「権限が必要です」と表示し、システム設定を開くボタンを出す
