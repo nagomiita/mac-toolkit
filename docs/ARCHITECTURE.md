@@ -45,8 +45,8 @@ ToolModule (@MainActor, AnyObject)
 ### 決めごと
 
 - **モジュールは MainActor 上で動く。** UI から直接読まれるため。重い処理（OCR、スクリーンショット合成など）だけを個別に `Task.detached` へ逃がします。
-  例外は `ScreenRecorder` で、`SCStream` が毎秒 30 回サンプルを返すため専用のシリアルキューを持ちます。
-  ただし `RecordingModule` 自体は MainActor のままで、キューに触れるのは `ScreenRecorder` の内側だけです。
+  例外は `ScreenRecorder` と `DisplayStreamer` で、`SCStream` が毎秒 30〜60 回サンプルを返すため専用のシリアルキューを持ちます。
+  ただし `RecordingModule` / `IPadDisplayModule` 自体は MainActor のままで、キューに触れるのはそれぞれの内側だけです。
   これは「値の取得を担う型」を UI 非依存に切り出す既存の形（`*Counters` / `*Sensors`）の延長で、
   モジュール本体が並行性を抱え込まないという線は守っています。
 - **View は `AnyView` で型消去する。** `associatedtype` にすると `ModuleRegistry` が異種のモジュールを 1 つの配列で保持できなくなるため、意図的に型消去を選んでいます。
@@ -103,6 +103,7 @@ IOKit / SMC / GPU 統計は**機種・OS バージョンによって普通に取
 | RDP 入力の英数・かな切り替え | 不要（CGEventTap ではなく、対象アプリが前面の間だけ `RegisterEventHotKey` で英数・かなを横取りする。前面アプリの変化は `NSWorkspace` の通知で拾う） |
 | スリープ抑止の切り替え | root（`pmset -a disablesleep`）。初回セットアップで `/etc/sudoers.d/mac-toolkit` に「この 2 コマンド完全一致のみ NOPASSWD」のルールを置き、以後はパスワードなしで切り替える。ルールの導入・解除だけ管理者パスワードのダイアログを出す。状態の読み取りは root 不要（`IOPMCopySystemPowerSettings` を dlsym で解決） |
 | スリープ抑止の自動オフ通知 | 通知（provisional。ダイアログを出さず通知センターにのみ静かに届く） |
+| iPad ディスプレイ（画面配信） | 画面収録＋ローカルネットワーク（`NSLocalNetworkUsageDescription` と `NSBonjourServices` を `Info.plist` に記載。macOS 15 以降は初回の配信開始時にダイアログが出る） |
 
 - **権限は「その機能を初めて使うとき」に要求する。** 起動直後にまとめて要求しない
 - 未許可でも**アプリ全体は正常に動く**こと。該当モジュールだけが「権限が必要です」と表示し、システム設定を開くボタンを出す
@@ -144,7 +145,16 @@ IOKit / SMC / GPU 統計は**機種・OS バージョンによって普通に取
 - **コード内の識別子・コメント・ログは対象外。** 変数名・型名・`id` 文字列は英語、`NSLog` の出力も英語のまま（開発者向けであってユーザー向けではないため）
 - README と Issue も日本語で書く
 
-## 9. 実装の順序
+## 9. リポジトリ内の別パッケージ: iPad ビューア
+
+`ipad/MacToolkitDisplay.swiftpm/` は「iPad ディスプレイ」機能（Issue #15）の受信側アプリで、**独立した Swift Playgrounds App パッケージ**です。
+
+- `Sources/` の外に置くのは意図的。iOS アプリは CLT だけの環境ではビルド・署名できず、`Package.swift` が使う `AppleProductTypes` は macOS 向けの通常ビルドで解決できないため、ルートの `swift build`（警告ゼロ維持の対象）から完全に切り離しています
+- iPad の Swift Playgrounds でフォルダごと開けばそのまま実機で動きます（Mac に Xcode があればそちらでも可）
+- ワイヤプロトコル定義 `StreamProtocol.swift` は Mac 側 `Modules/iPadDisplay/` と**手動コピーで二重管理**しています。ターゲットを共有できないための妥協で、変更時は必ず両方を同時に書き換えます（両ファイル先頭に注記あり）
+- 詳細な使い方とプロトコル仕様は [docs/IPAD_DISPLAY.md](IPAD_DISPLAY.md) を参照
+
+## 10. 実装の順序
 
 1. ~~基盤（`ToolModule` / `ModuleRegistry` / `Sampler`）~~ ✅ 完了
 2. **ネットワーク速度**（Issue #2）— 初の実モジュール。`tick()` での差分計算という最も基本的なパターンをここで確立する
