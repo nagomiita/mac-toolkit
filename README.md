@@ -31,7 +31,8 @@ open build/MacToolkit.app
 
 - `ModuleRegistry` — 全モジュールの登録・有効/無効・永続化・ライフサイクル
 - `Sampler` — 全モジュール共通の 1 本のタイマー。モジュール個別に Timer を持たせない（常駐アプリの省電力のため）
-- `Modules/` — 各機能。現在は動作確認用の `PlaceholderModule` のみ
+- `Modules/` — 各機能
+- `ipad/MacToolkitDisplay.swiftpm/` — iPad を外部ディスプレイとして使うときの受信側アプリ（Swift Playgrounds で実行。[docs/IPAD_DISPLAY.md](docs/IPAD_DISPLAY.md) 参照）
 
 新しい機能を足すときは `Modules/` にモジュールを作り、`MacToolkitApp.init` の登録配列に追加します。
 

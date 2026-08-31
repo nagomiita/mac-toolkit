@@ -19,6 +19,12 @@
 	<string>接続中の Wi-Fi ネットワーク名（SSID）を表示するために使用します。位置情報の記録や送信は行いません。</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>画面録画に自分の声を含めるために使用します。録音は Mac 内に保存され、送信は行いません。</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>iPad を外部ディスプレイとして使うために、同じネットワーク内の iPad へ画面の映像を送信します。</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_mactoolkit-display._tcp</string>
+	</array>
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
 	<!-- Dock とアプリスイッチャーに出さず、メニューバーのみに常駐させる -->

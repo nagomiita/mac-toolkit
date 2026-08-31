@@ -18,6 +18,7 @@ struct MacToolkitApp: App {
             ClipboardModule(),
             ScreenshotModule(),
             RecordingModule(),
+            IPadDisplayModule(),
             RemoteInputModule(),
             LidSleepModule(),
         ])

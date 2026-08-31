@@ -28,10 +28,12 @@ final class ModuleRegistry {
     private static let enabledKey = "enabledModuleIDs"
     private static let menuBarKey = "menuBarModuleIDs"
     private static let intervalKey = "sampleInterval"
-    /// recording と lidsleep は動作中しか描画しない（待機中は statusItemView が
-    /// nil）ので、既定に入れても平常時のメニューバーの幅は変わらない。
+    /// recording・ipaddisplay・lidsleep は動作中しか描画しない（待機中は
+    /// statusItemView が nil）ので、既定に入れても平常時のメニューバーの幅は変わらない。
     /// lidsleep は「スリープ抑止がオンのまま」を見えるようにする警告なので既定に含める。
-    private static let defaultMenuBarIDs: Set<String> = ["cpu", "network", "recording", "lidsleep"]
+    private static let defaultMenuBarIDs: Set<String> = [
+        "cpu", "network", "recording", "ipaddisplay", "lidsleep",
+    ]
 
     init(modules: [any ToolModule]) {
         let saved = UserDefaults.standard.double(forKey: Self.intervalKey)
